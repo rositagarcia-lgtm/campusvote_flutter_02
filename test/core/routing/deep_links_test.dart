@@ -23,7 +23,7 @@ void main() {
     test('lee la URL completa del QR impreso', () {
       expect(
         parseStandQr(
-            'https://campusvote-front.onrender.com/ferias/f-1/proyectos/p-9'),
+            'https://campusvote-web.onrender.com/ferias/f-1/proyectos/p-9'),
         ('f-1', 'p-9'),
       );
     });

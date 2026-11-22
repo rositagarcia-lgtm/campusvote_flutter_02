@@ -38,7 +38,7 @@
                 <category android:name="android.intent.category.DEFAULT"/>
                 <category android:name="android.intent.category.BROWSABLE"/>
                 <data android:scheme="https"
-                      android:host="campusvote-front.onrender.com"/>
+                      android:host="campusvote-web.onrender.com"/>
                 <data android:pathPrefix="/ferias/"/>
                 <data android:pathPrefix="/j/"/>
             </intent-filter>

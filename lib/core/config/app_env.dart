@@ -6,7 +6,7 @@ class AppEnv {
 
   static const String apiBaseUrl = String.fromEnvironment(
     'API_BASE_URL',
-    defaultValue: 'https://campusvote-rg13.onrender.com',
+    defaultValue: 'https://campusvote-02.onrender.com',
   );
 
   static const String envName = String.fromEnvironment(

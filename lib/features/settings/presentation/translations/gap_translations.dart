@@ -268,6 +268,10 @@ const gapTranslations = <String, String>{
       'This information is no longer available. Refresh the screen.',
   'El estado cambió o esta acción ya se registró. Actualiza la información.':
       'The status changed or this action was already recorded. Refresh the information.',
+  'Aún no es el momento. Espera a que la feria empiece.':
+      'It is not time yet. Wait for the fair to start.',
+  'La feria ya terminó. Ya no se puede responder la rúbrica.':
+      'The fair has ended. The rubric can no longer be answered.',
   'El servicio no está disponible por el momento. Inténtalo más tarde.':
       'The service is unavailable right now. Try again later.',
   'No pudimos conectar. Revisa tu conexión e inténtalo de nuevo.':

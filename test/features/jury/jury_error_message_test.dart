@@ -18,6 +18,16 @@ void main() {
     expect(message, isNot(contains('INTERNAL_DUPLICATE_VOTE')));
   });
 
+  test('un voto ya emitido no se muestra como error de carga', () {
+    const voted = JuryApiException(
+      'Ya emitiste tu voto en esta categoría',
+      statusCode: 409,
+      code: 'CONFLICT',
+    );
+
+    expect(describeJuryError(voted), alreadyVotedMessage);
+  });
+
   test('antes de que empiece la feria no se muestra un conflicto genérico', () {
     const early = JuryApiException(
       'Las evaluaciones empiezan cuando inicia la feria',
@@ -29,6 +39,7 @@ void main() {
       describeJuryError(early),
       'Aún no es el momento. Espera a que la feria empiece.',
     );
+    expect(juryRubricGate(describeJuryError(early)), JuryRubricGate.waiting);
   });
 
   test('RUBRICS_INCOMPLETE conserva el mensaje claro del backend', () {

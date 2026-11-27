@@ -88,6 +88,17 @@ const gapTranslations = <String, String>{
   'Las contraseñas no coinciden.': 'The passwords do not match.',
   'Listo: tu cuenta de jurado quedó creada. Ingresa con tu correo y la contraseña que acabas de elegir.':
       'Done: your judge account was created. Sign in with your email and the password you just chose.',
+  'Listo: tu cuenta de jurado quedó creada y se cerró la otra sesión. Ingresa con tu correo y la contraseña que acabas de elegir.':
+      'Done: your judge account was created and the other session was closed. Sign in with your email and the password you just chose.',
+  'Tienes una sesión de estudiante abierta. Al crear la cuenta de jurado se cierra sola, para que entres con el correo de la invitación.':
+      'You have a student session open. Creating the judge account closes it, so you can sign in with the invited email.',
+  'Tienes otra sesión abierta. Al crear la cuenta de jurado se cierra sola, para que entres con el correo de la invitación.':
+      'You have another session open. Creating the judge account closes it, so you can sign in with the invited email.',
+  'Ya registraste tu voto': 'You already cast your vote',
+  'Ya registraste tu voto oficial en esta categoría.':
+      'You already cast your official vote in this category.',
+  'Aún no puedes ver los proyectos. Espera a que cierre la inscripción de la feria.':
+      'You cannot see the projects yet. Wait until fair registration closes.',
   'Invitación de jurado': 'Judge invitation',
   'Te invitaron a ser jurado': 'You were invited to be a judge',
   'Acepta la invitación para ver la feria, firmar tu declaración y calificar los proyectos asignados.':
@@ -270,6 +281,15 @@ const gapTranslations = <String, String>{
       'The status changed or this action was already recorded. Refresh the information.',
   'Aún no es el momento. Espera a que la feria empiece.':
       'It is not time yet. Wait for the fair to start.',
+  'AÚN NO EMPIEZA': 'NOT STARTED YET',
+  'Aún no puedes entrar': 'You cannot enter yet',
+  'La rúbrica se abre cuando inicia la feria.':
+      'The rubric opens when the fair starts.',
+  'Revisar de nuevo': 'Check again',
+  'FERIA CERRADA': 'FAIR CLOSED',
+  'La feria ya terminó': 'The fair has ended',
+  'Ya no se puede responder la rúbrica.':
+      'The rubric can no longer be answered.',
   'La feria ya terminó. Ya no se puede responder la rúbrica.':
       'The fair has ended. The rubric can no longer be answered.',
   'El servicio no está disponible por el momento. Inténtalo más tarde.':

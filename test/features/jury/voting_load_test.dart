@@ -1,3 +1,4 @@
+import 'package:campusvote_flutter/features/jury/data/datasources/jury_remote_datasource.dart';
 import 'package:campusvote_flutter/features/jury/data/models/jury_models.dart';
 import 'package:campusvote_flutter/features/jury/domain/repositories/jury_repository.dart';
 import 'package:campusvote_flutter/features/jury/presentation/providers/data/jury_dependencies.dart';
@@ -103,4 +104,55 @@ void main() {
     expect(state.projects.map((p) => p.id), ['a', 'c']);
     expect(state.canVote, isTrue);
   });
+
+  test('si ya votó, un fallo al listar proyectos no tapa el voto registrado',
+      () async {
+    final container = ProviderContainer(overrides: [
+      juryRepositoryProvider.overrideWithValue(_VotedRepo()),
+    ]);
+    addTearDown(container.dispose);
+
+    await container.read(votingFormProvider('f-1').notifier).load();
+    final state = container.read(votingFormProvider('f-1'));
+
+    expect(state.status?.hasVoted, isTrue);
+    expect(state.hasVoted, isTrue);
+    expect(state.errorMessage, isNull);
+  });
+}
+
+class _VotedRepo implements JuryRepository {
+  @override
+  Future<VotingStatusModel> getVotingStatus(String fairId) async =>
+      VotingStatusModel.fromJson({
+        'fair_id': fairId,
+        'fair_status': 'OPEN',
+        'has_voted': true,
+        'voting_window': 'OPEN',
+      });
+
+  @override
+  Future<PaginatedResult<FairProjectModel>> getFairProjects(
+    String fairId, {
+    int page = 1,
+    int limit = 100,
+    String? search,
+  }) async {
+    throw const JuryApiException(
+      'Verás los proyectos cuando cierre la inscripción de la feria',
+      statusCode: 409,
+      code: 'CONFLICT',
+    );
+  }
+
+  @override
+  Future<PaginatedResult<JuryEvaluationSummaryModel>> getMyEvaluations({
+    int page = 1,
+    int limit = 50,
+    String? fairId,
+  }) async =>
+      PaginatedResult(items: const [], total: 0, page: 1, limit: limit);
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }

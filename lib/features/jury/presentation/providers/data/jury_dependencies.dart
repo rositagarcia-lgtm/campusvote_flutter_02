@@ -39,6 +39,10 @@ String describeJuryError(Object error) {
     if (transportCode == 'rubrics_incomplete' && error.message.isNotEmpty) {
       return error.message;
     }
+    // Un voto ya emitido no es un fallo de carga: la pantalla lo muestra aparte.
+    if (error.statusCode == 409 && alreadyVotedCopy(error.message) != null) {
+      return alreadyVotedMessage;
+    }
     final schedule = _fairScheduleMessage(error.message);
     if (error.statusCode == 409 && schedule != null) return schedule;
     return switch (error.statusCode) {
@@ -57,6 +61,32 @@ String describeJuryError(Object error) {
   return 'No se pudo completar la operación.';
 }
 
+const alreadyVotedMessage =
+    'Ya registraste tu voto oficial en esta categoría.';
+
+/// El 409 de voto repetido trae un texto claro. El resto sigue oculto.
+String? alreadyVotedCopy(String message) {
+  final text = message.toLowerCase();
+  if (text.contains('ya emitiste tu voto') || text.contains('already voted')) {
+    return alreadyVotedMessage;
+  }
+  return null;
+}
+
+/// La rúbrica aún no se puede abrir, o la feria ya cerró.
+enum JuryRubricGate { waiting, closed }
+
+/// Distingue el horario de un fallo de red para no pintarlo como desconexión.
+JuryRubricGate? juryRubricGate(String? message) {
+  return switch (message) {
+    'Aún no es el momento. Espera a que la feria empiece.' =>
+      JuryRubricGate.waiting,
+    'La feria ya terminó. Ya no se puede responder la rúbrica.' =>
+      JuryRubricGate.closed,
+    _ => null,
+  };
+}
+
 /// El 409 de horario trae un texto claro. El resto de los 409 sigue oculto.
 String? _fairScheduleMessage(String message) {
   final text = message.toLowerCase();
@@ -66,6 +96,9 @@ String? _fairScheduleMessage(String message) {
   }
   if (text.contains('período de evaluación') && text.contains('terminó')) {
     return 'La feria ya terminó. Ya no se puede responder la rúbrica.';
+  }
+  if (text.contains('cierre la inscripción')) {
+    return 'Aún no puedes ver los proyectos. Espera a que cierre la inscripción de la feria.';
   }
   return null;
 }

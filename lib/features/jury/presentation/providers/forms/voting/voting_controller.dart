@@ -5,7 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../data/models/jury_models.dart';
 import '../../../../domain/repositories/jury_repository.dart';
 import '../../data/jury_dependencies.dart'
-    show describeJuryError, juryRepositoryProvider;
+    show alreadyVotedMessage, describeJuryError, juryRepositoryProvider;
 import '../../../state/jury_state.dart';
 import '../../progress/jury_progress_provider.dart'
     show juryProgressProvider;
@@ -67,52 +67,87 @@ class VotingFormController extends StateNotifier<VotingFormState> {
       clearError: true,
       evaluationsLoading: true,
     );
+    final repo = _ref.read(juryRepositoryProvider);
+    final VotingStatusModel status;
     try {
-      final repo = _ref.read(juryRepositoryProvider);
-      final results = await Future.wait([
-        repo.getVotingStatus(fairId),
-        _fetchAllProjects(repo),
-        _fetchAllEvaluations(repo),
-      ]);
-      if (!mounted) return;
-
-      final status = results[0] as VotingStatusModel;
-      final allProjects = results[1] as List<FairProjectModel>;
-      final allEvals = results[2] as List<JuryEvaluationSummaryModel>;
-
-      // El servidor solo acepta votos por proyectos aprobados.
-      final approvedProjects = allProjects
-          .where((p) => p.status == 'APPROVED')
-          .toList(growable: false);
-
-      final categoryProgress = calculateCategoryProgress(
-        projects: approvedProjects,
-        evaluations: allEvals,
-        categories: status.categories,
-      );
-
-      state = state.copyWith(
-        loading: false,
-        requiresStatusRefresh: false,
-        evaluationsLoading: false,
-        scores: extractMyScores(allEvals),
-        status: status,
-        activeCategoryId: status.categories.isEmpty
-            ? null
-            : (status.categories.where((c) => !c.hasVoted).firstOrNull ??
-                    status.categories.first)
-                .id,
-        projects: approvedProjects,
-        categoryProgress: categoryProgress,
-      );
+      status = await repo.getVotingStatus(fairId);
     } catch (e) {
       if (!mounted) return;
+      final message = describeJuryError(e);
+      // El estado del voto es lo que decide la pantalla. Si el servidor dice
+      // que ya votó, no se pinta como un error de carga.
+      if (message == alreadyVotedMessage) {
+        state = _votedState();
+        return;
+      }
       state = state.copyWith(
         loading: false,
         evaluationsLoading: false,
-        errorMessage: describeJuryError(e),
+        errorMessage: message,
       );
+      return;
     }
+    if (!mounted) return;
+
+    var approvedProjects = const <FairProjectModel>[];
+    var allEvals = const <JuryEvaluationSummaryModel>[];
+    String? sideError;
+    try {
+      final allProjects = await _fetchAllProjects(repo);
+      approvedProjects = allProjects
+          .where((p) => p.status == 'APPROVED')
+          .toList(growable: false);
+    } catch (e) {
+      sideError = describeJuryError(e);
+    }
+    if (!mounted) return;
+    try {
+      allEvals = await _fetchAllEvaluations(repo);
+    } catch (e) {
+      sideError ??= describeJuryError(e);
+    }
+    if (!mounted) return;
+
+    final categoryProgress = calculateCategoryProgress(
+      projects: approvedProjects,
+      evaluations: allEvals,
+      categories: status.categories,
+    );
+    // Si ya votó, la lista de proyectos no debe tapar el comprobante.
+    final hideSideError =
+        status.hasVoted || sideError == null || sideError == alreadyVotedMessage;
+
+    state = state.copyWith(
+      loading: false,
+      requiresStatusRefresh: false,
+      evaluationsLoading: false,
+      scores: extractMyScores(allEvals),
+      status: status,
+      activeCategoryId: status.categories.isEmpty
+          ? null
+          : (status.categories.where((c) => !c.hasVoted).firstOrNull ??
+                  status.categories.first)
+              .id,
+      projects: approvedProjects,
+      categoryProgress: categoryProgress,
+      clearError: hideSideError,
+      errorMessage: hideSideError ? null : sideError,
+    );
+  }
+
+  VotingFormState _votedState() {
+    return state.copyWith(
+      loading: false,
+      evaluationsLoading: false,
+      requiresStatusRefresh: false,
+      status: state.status?.withCategoryVoted(state.activeCategoryId) ??
+          VotingStatusModel(
+            fairId: fairId,
+            fairStatus: FairStatus.open,
+            hasVoted: true,
+          ),
+      clearError: true,
+    );
   }
 
   /// Reconciliación ligera tras una respuesta ambigua del voto.
@@ -207,6 +242,11 @@ class VotingFormController extends StateNotifier<VotingFormState> {
     } catch (e) {
       if (!mounted) return false;
       final message = describeJuryError(e);
+      if (message == alreadyVotedMessage) {
+        state = _votedState().copyWith(submitting: false, clearSelection: true);
+        await refreshStatus();
+        return false;
+      }
       state = state.copyWith(
         submitting: false,
         requiresStatusRefresh: true,

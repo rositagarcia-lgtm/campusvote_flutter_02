@@ -175,6 +175,6 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.byType(VoteReceiptView), findsNothing);
     expect(find.byType(VoteParticipationView), findsOneWidget);
-    expect(find.text('Ya has votado'), findsOneWidget);
+    expect(find.text('Ya registraste tu voto'), findsOneWidget);
   });
 }

@@ -3,10 +3,13 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../../core/config/app_env.dart';
+import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_icons.dart';
 import '../../../../core/theme/app_dimensions.dart';
 import '../../../../core/widgets/app_appbar.dart';
+import '../../../../core/widgets/app_button.dart';
 import '../../../../core/widgets/app_error_view.dart';
+import '../../../../core/widgets/app_palette.dart';
 import '../../../../core/widgets/app_loader.dart';
 import '../../../../core/widgets/app_motion.dart';
 import '../../../../core/widgets/app_notice.dart';
@@ -28,7 +31,7 @@ import '../widgets/rubric_form_widgets.dart';
 /// interruptor porque el backend guarda un checklist (`checked`), calcula el
 /// score 0–20 y rechaza con 400 cualquier campo extra (`schema .strict()`),
 /// por eso no hay slider ni comentario por criterio.
-class RubricEvaluationPage extends ConsumerWidget {
+class RubricEvaluationPage extends ConsumerStatefulWidget {
   const RubricEvaluationPage({
     super.key,
     required this.fairId,
@@ -39,13 +42,54 @@ class RubricEvaluationPage extends ConsumerWidget {
   final String projectId;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final args = RubricArgs(fairId: fairId, projectId: projectId);
-    final state = ref.watch(rubricFormProvider(args));
-    final controller = ref.read(rubricFormProvider(args).notifier);
-    final listed = ref.watch(fairProjectsProvider(fairId));
-    final project =
-        listed.asData?.value.where((item) => item.id == projectId).firstOrNull;
+  ConsumerState<RubricEvaluationPage> createState() =>
+      _RubricEvaluationPageState();
+}
+
+class _RubricEvaluationPageState extends ConsumerState<RubricEvaluationPage>
+    with WidgetsBindingObserver {
+  RubricArgs get _args =>
+      RubricArgs(fairId: widget.fairId, projectId: widget.projectId);
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    _reloadIfBlocked();
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) _reloadIfBlocked();
+  }
+
+  /// El 409 de horario se queda guardado. Al volver a abrir la hoja, o al
+  /// regresar a la app, se consulta de nuevo: si la feria ya empezó, entra.
+  void _reloadIfBlocked() {
+    if (!mounted) return;
+    final current = ref.read(rubricFormProvider(_args));
+    if (current.loading || current.hasData || current.errorMessage == null) {
+      return;
+    }
+    ref.read(rubricFormProvider(_args).notifier).load();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final state = ref.watch(rubricFormProvider(_args));
+    final controller = ref.read(rubricFormProvider(_args).notifier);
+    final listed = ref.watch(fairProjectsProvider(widget.fairId));
+    final project = listed.asData?.value
+        .where((item) => item.id == widget.projectId)
+        .firstOrNull;
+    final gate = juryRubricGate(state.errorMessage);
+    final fair = ref.watch(juryFairAssignmentProvider(widget.fairId));
 
     return Scaffold(
       appBar: buildCampusVoteAppBar(
@@ -55,22 +99,133 @@ class RubricEvaluationPage extends ConsumerWidget {
           IconButton(
             tooltip: SettingsCopy.of(context).t('Votar en esta feria'),
             icon: const Icon(PhosphorIconsFill.checkSquareOffset),
-            onPressed: () => context.push('/jury/fair/$fairId/vote'),
+            onPressed: () => context.push('/jury/fair/${widget.fairId}/vote'),
           ),
         ],
       ),
       body: state.loading
           ? const AppLoader()
           : !state.hasData
-              ? AppErrorView(
-                  message: state.errorMessage ?? 'No se pudo cargar la rúbrica',
-                  onRetry: controller.load,
-                )
+              ? gate == null
+                  ? AppErrorView(
+                      message:
+                          state.errorMessage ?? 'No se pudo cargar la rúbrica',
+                      onRetry: controller.load,
+                    )
+                  : _RubricScheduleGate(
+                      waiting: gate == JuryRubricGate.waiting,
+                      startsAt: fair?.startsAt,
+                      onCheck: controller.load,
+                    )
               : _RubricForm(
                   state: state,
                   controller: controller,
                   project: project,
                 ),
+    );
+  }
+}
+
+class _RubricScheduleGate extends StatelessWidget {
+  const _RubricScheduleGate({
+    required this.waiting,
+    required this.onCheck,
+    this.startsAt,
+  });
+
+  final bool waiting;
+  final DateTime? startsAt;
+  final VoidCallback onCheck;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+    final text = SettingsCopy.of(context);
+    final tone = appToneColors(
+      waiting ? AppTone.warning : AppTone.neutral,
+      isDark: isDark,
+    );
+    final when = startsAt == null
+        ? null
+        : text.isEnglish
+            ? 'Starts on ${text.formatDate(startsAt!)}.'
+            : 'Empieza el ${text.formatDate(startsAt!)}.';
+
+    return SingleChildScrollView(
+      physics: const AlwaysScrollableScrollPhysics(),
+      padding: const EdgeInsets.all(AppSpacing.xl),
+      child: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: kFormMaxWidth),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: AppDimensions.touchTarget,
+                height: AppDimensions.touchTarget,
+                decoration: BoxDecoration(
+                  color: tone.bg,
+                  borderRadius: AppRadii.rMedium,
+                ),
+                child: Icon(
+                  waiting
+                      ? PhosphorIconsRegular.hourglass
+                      : PhosphorIconsRegular.calendarX,
+                  size: AppDimensions.iconLarge * 1.25,
+                  color: waiting ? AppColors.warning : tone.fg,
+                ),
+              ),
+              const SizedBox(height: AppSpacing.l),
+              Text(
+                text.t(waiting ? 'AÚN NO EMPIEZA' : 'FERIA CERRADA'),
+                textAlign: TextAlign.center,
+                style: theme.textTheme.labelSmall?.copyWith(
+                  color: waiting ? AppColors.warning : appMuted(isDark),
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: 1.4,
+                ),
+              ),
+              const SizedBox(height: AppSpacing.xs),
+              Text(
+                text.t(waiting ? 'Aún no puedes entrar' : 'La feria ya terminó'),
+                textAlign: TextAlign.center,
+                style: theme.textTheme.titleLarge?.copyWith(
+                  fontFamily: 'serif',
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              const SizedBox(height: AppSpacing.s),
+              Text(
+                text.t(
+                  waiting
+                      ? 'La rúbrica se abre cuando inicia la feria.'
+                      : 'Ya no se puede responder la rúbrica.',
+                ),
+                textAlign: TextAlign.center,
+                style: theme.textTheme.bodyMedium?.copyWith(height: 1.5),
+              ),
+              if (when != null && waiting) ...[
+                const SizedBox(height: AppSpacing.m),
+                Text(
+                  when,
+                  textAlign: TextAlign.center,
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    color: appMuted(isDark),
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
+              const SizedBox(height: AppSpacing.xl),
+              AppButton(
+                label: text.t('Revisar de nuevo'),
+                icon: PhosphorIconsRegular.arrowClockwise,
+                onPressed: onCheck,
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }

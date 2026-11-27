@@ -173,7 +173,7 @@ class VoteParticipationView extends StatelessWidget {
             Semantics(
               header: true,
               child: Text(
-                copy.t('Ya has votado'),
+                copy.t('Ya registraste tu voto'),
                 textAlign: TextAlign.center,
                 style: theme.textTheme.titleLarge?.copyWith(
                   fontWeight: FontWeight.w700,

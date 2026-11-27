@@ -14,6 +14,7 @@ import '../../../../core/widgets/app_button.dart';
 import '../../../../core/widgets/app_notice.dart';
 import '../../../../core/widgets/app_status_chip.dart';
 import '../../../../core/widgets/app_text_field.dart';
+import '../../../auth/domain/entities/auth_role.dart';
 import '../../../auth/presentation/state/auth_controller.dart';
 import '../../../settings/presentation/settings_copy.dart';
 import '../providers/jury_providers.dart';
@@ -30,6 +31,8 @@ String describeInvitationError(Object error) {
   if (failure is NetworkFailure || failure is TimeoutFailure) {
     return 'No pudimos contactar al servidor. Revisa tu conexión e inténtalo de nuevo.';
   }
+  final known = _knownInvitationMessage(failure.message);
+  if (known != null) return known;
   if (failure is UnauthorizedFailure || failure is ForbiddenFailure) {
     return 'Inicia sesión con el correo invitado para aceptar esta invitación.';
   }
@@ -48,6 +51,29 @@ String describeInvitationError(Object error) {
     return 'El servicio no está disponible por el momento. Inténtalo más tarde.';
   }
   return 'No pudimos procesar la invitación. Inténtalo de nuevo.';
+}
+
+/// Textos que el backend escribe para quien abre el enlace. Un 409 interno
+/// sigue oculto: no todo conflicto significa que la invitación ya se aceptó.
+String? _knownInvitationMessage(String message) {
+  const known = <String>[
+    'Ya aceptaste esta invitación. Inicia sesión con tu correo para entrar.',
+    'La invitación ya no está vigente',
+    'La feria ya no admite nuevas asignaciones de jurado',
+    'Esta invitación pertenece a una cuenta existente. Inicia sesión para aceptarla.',
+    'La invitación ya fue utilizada o revocada',
+    'Ya existe una cuenta o asignación para esta invitación',
+    'Esta cuenta no puede aceptar asignaciones de jurado',
+    'Inicia sesión con el correo que recibió la invitación',
+    'La cuenta no está activa',
+    'El enlace de invitación no es válido',
+    'La contraseña debe tener al menos 10 caracteres',
+  ];
+  final text = message.trim();
+  for (final item in known) {
+    if (text == item || text.startsWith(item)) return text;
+  }
+  return null;
 }
 
 /// `/j/invitacion?token=…` — el jurado externo acepta su invitación en la app.
@@ -140,9 +166,17 @@ class _JuryInvitationPageState extends ConsumerState<JuryInvitationPage> {
         {'token': widget.token, 'password': _password.text},
         public: true,
       );
+      final hadOtherSession =
+          ref.read(authControllerProvider).authenticated;
+      if (hadOtherSession) {
+        // La sesión de estudiante no puede quedar abierta: el panel de jurado
+        // exige entrar con la cuenta que acaba de crearse.
+        await ref.read(authControllerProvider.notifier).logout();
+      }
       if (mounted) {
-        setState(() => _done =
-            'Listo: tu cuenta de jurado quedó creada. Ingresa con tu correo y la contraseña que acabas de elegir.');
+        setState(() => _done = hadOtherSession
+            ? 'Listo: tu cuenta de jurado quedó creada y se cerró la otra sesión. Ingresa con tu correo y la contraseña que acabas de elegir.'
+            : 'Listo: tu cuenta de jurado quedó creada. Ingresa con tu correo y la contraseña que acabas de elegir.');
       }
     });
   }
@@ -156,8 +190,9 @@ class _JuryInvitationPageState extends ConsumerState<JuryInvitationPage> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final authenticated =
-        ref.watch(authControllerProvider.select((s) => s.authenticated));
+    final session = ref.watch(authControllerProvider);
+    final canAcceptWithSession = session.authenticated &&
+        AuthRole.usesJuryPanel(session.user?.role);
     final validToken = widget.token.length >= 32;
 
     return Scaffold(
@@ -207,7 +242,7 @@ class _JuryInvitationPageState extends ConsumerState<JuryInvitationPage> {
                         icon: PhosphorIconsRegular.signIn,
                         onPressed: () => context.go('/auth/jury/login'),
                       ),
-                    ] else if (authenticated)
+                    ] else if (canAcceptWithSession)
                       AppButton(
                         label: 'Aceptar invitación',
                         icon: PhosphorIconsRegular.check,
@@ -215,6 +250,17 @@ class _JuryInvitationPageState extends ConsumerState<JuryInvitationPage> {
                         onPressed: _busy ? null : _acceptWithSession,
                       )
                     else ...[
+                      if (session.authenticated) ...[
+                        NoticeBanner(
+                          tone: AppTone.warning,
+                          message: SettingsCopy.of(context).t(session
+                                      .user?.role ==
+                                  AuthRole.student
+                              ? 'Tienes una sesión de estudiante abierta. Al crear la cuenta de jurado se cierra sola, para que entres con el correo de la invitación.'
+                              : 'Tienes otra sesión abierta. Al crear la cuenta de jurado se cierra sola, para que entres con el correo de la invitación.'),
+                        ),
+                        const SizedBox(height: AppSpacing.l),
+                      ],
                       Text(SettingsCopy.of(context).t('Soy nuevo en CampusVote'),
                           style: theme.textTheme.titleSmall
                               ?.copyWith(fontWeight: FontWeight.w800)),

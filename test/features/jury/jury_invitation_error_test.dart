@@ -28,6 +28,30 @@ void main() {
     );
   });
 
+  test('una cuenta existente no se disfraza de invitación aceptada', () {
+    final request = RequestOptions(path: '/api/fair-jury-invitations/accept/new');
+    final error = DioException(
+      requestOptions: request,
+      type: DioExceptionType.badResponse,
+      response: Response(
+        requestOptions: request,
+        statusCode: 409,
+        data: {
+          'error': {
+            'code': 'CONFLICT',
+            'message':
+                'Esta invitación pertenece a una cuenta existente. Inicia sesión para aceptarla.',
+          },
+        },
+      ),
+    );
+
+    expect(
+      describeInvitationError(error),
+      'Esta invitación pertenece a una cuenta existente. Inicia sesión para aceptarla.',
+    );
+  });
+
   test('invitación ya aceptada no culpa a la conexión', () {
     expect(
       describeInvitationError(_badResponse(409, code: 'ALREADY_ACCEPTED')),
